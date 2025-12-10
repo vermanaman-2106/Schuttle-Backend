@@ -3,6 +3,7 @@ const Booking = require('../models/Booking');
 const Ride = require('../models/Ride');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
+const { sendPushNotification } = require('../utils/notifications');
 
 // @desc    Create a new booking
 // @route   POST /api/bookings
@@ -202,9 +203,24 @@ exports.createBooking = async (req, res, next) => {
     });
 
     // Populate booking with related data
-    await booking.populate('studentId', 'name email phone');
-    await booking.populate('driverId', 'name phone vehicleModel vehicleNumber');
+    await booking.populate('studentId', 'name email phone notificationToken');
+    await booking.populate('driverId', 'name phone vehicleModel vehicleNumber notificationToken');
     await booking.populate('rideId');
+
+    // Send notification to driver about new booking
+    if (booking.driverId && booking.driverId.notificationToken) {
+      const studentName = booking.studentId.name || 'A student';
+      sendPushNotification(
+        booking.driverId.notificationToken,
+        'New Booking Request',
+        `${studentName} booked ${seatsBooked} seat(s) for your ride from ${ride.pickupLocation} to ${ride.dropLocation}`,
+        {
+          type: 'new_booking',
+          bookingId: booking._id.toString(),
+          rideId: ride._id.toString(),
+        }
+      ).catch((err) => console.error('Error sending notification to driver:', err));
+    }
 
     res.status(201).json({
       success: true,
@@ -220,6 +236,11 @@ exports.createBooking = async (req, res, next) => {
 // @access  Private (Student only)
 exports.getMyBookings = async (req, res, next) => {
   try {
+    // Disable caching for real-time booking data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     const bookings = await Booking.find({ studentId: req.user.id })
       .populate('rideId')
       .populate('driverId', 'name phone vehicleModel vehicleNumber')
@@ -240,6 +261,11 @@ exports.getMyBookings = async (req, res, next) => {
 // @access  Private (Driver only)
 exports.getDriverBookings = async (req, res, next) => {
   try {
+    // Disable caching for real-time booking data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     // Find all rides by this driver
     const rides = await Ride.find({ driverId: req.user.id });
     const rideIds = rides.map((ride) => ride._id);
@@ -312,10 +338,27 @@ exports.cancelBooking = async (req, res, next) => {
     }
 
     await booking.populate('rideId');
-    await booking.populate('driverId', 'name phone vehicleModel vehicleNumber');
+    await booking.populate('studentId', 'name email phone registrationNumber');
+    await booking.populate('driverId', 'name phone vehicleModel vehicleNumber notificationToken');
+
+    // Send notification to driver about booking cancellation
+    if (booking.driverId && booking.driverId.notificationToken) {
+      const studentName = booking.studentId.name || 'A student';
+      sendPushNotification(
+        booking.driverId.notificationToken,
+        'Booking Cancelled',
+        `${studentName} cancelled their booking for ${booking.seatsBooked} seat(s) from ${booking.pickupLocation} to ${booking.dropLocation}`,
+        {
+          type: 'booking_cancelled',
+          bookingId: booking._id.toString(),
+          rideId: booking.rideId._id.toString(),
+        }
+      ).catch((err) => console.error('Error sending notification to driver:', err));
+    }
 
     res.json({
       success: true,
+      message: 'Booking cancelled successfully',
       booking,
     });
   } catch (error) {
@@ -354,9 +397,24 @@ exports.confirmBooking = async (req, res, next) => {
     await booking.save();
 
     // Populate booking with related data
-    await booking.populate('studentId', 'name email phone registrationNumber');
+    await booking.populate('studentId', 'name email phone registrationNumber notificationToken');
     await booking.populate('driverId', 'name phone vehicleModel vehicleNumber');
     await booking.populate('rideId');
+
+    // Send notification to student about booking confirmation
+    if (booking.studentId && booking.studentId.notificationToken) {
+      const driverName = booking.driverId.name || 'Driver';
+      sendPushNotification(
+        booking.studentId.notificationToken,
+        'Booking Confirmed! 🎉',
+        `Your booking for ${booking.seatsBooked} seat(s) from ${booking.pickupLocation} to ${booking.dropLocation} has been confirmed by ${driverName}`,
+        {
+          type: 'booking_confirmed',
+          bookingId: booking._id.toString(),
+          rideId: booking.rideId._id.toString(),
+        }
+      ).catch((err) => console.error('Error sending notification to student:', err));
+    }
 
     res.json({
       success: true,
@@ -426,9 +484,24 @@ exports.rejectBooking = async (req, res, next) => {
     }
 
     // Populate booking with related data
-    await booking.populate('studentId', 'name email phone registrationNumber');
+    await booking.populate('studentId', 'name email phone registrationNumber notificationToken');
     await booking.populate('driverId', 'name phone vehicleModel vehicleNumber');
     await booking.populate('rideId');
+
+    // Send notification to student about booking rejection
+    if (booking.studentId && booking.studentId.notificationToken) {
+      const driverName = booking.driverId.name || 'Driver';
+      sendPushNotification(
+        booking.studentId.notificationToken,
+        'Booking Rejected',
+        `Your booking request for ${booking.seatsBooked} seat(s) from ${booking.pickupLocation} to ${booking.dropLocation} has been rejected by ${driverName}`,
+        {
+          type: 'booking_rejected',
+          bookingId: booking._id.toString(),
+          rideId: booking.rideId._id.toString(),
+        }
+      ).catch((err) => console.error('Error sending notification to student:', err));
+    }
 
     res.json({
       success: true,

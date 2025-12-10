@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
 const generateToken = require('../utils/generateToken');
+const { sendPushNotification } = require('../utils/notifications');
 
 // @desc    Register a student
 // @route   POST /api/auth/student/register
@@ -223,6 +224,34 @@ exports.loginDriver = async (req, res, next) => {
         totalSeats: driver.totalSeats,
         verified: driver.verified,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Save notification token for user/driver
+// @route   PUT /api/auth/notification-token
+// @access  Private
+exports.saveNotificationToken = async (req, res, next) => {
+  try {
+    const { notificationToken } = req.body;
+
+    if (!notificationToken) {
+      return res.status(400).json({ message: 'Notification token is required' });
+    }
+
+    if (req.user.role === 'student') {
+      await User.findByIdAndUpdate(req.user.id, { notificationToken });
+    } else if (req.user.role === 'driver') {
+      await Driver.findByIdAndUpdate(req.user.id, { notificationToken });
+    } else {
+      return res.status(400).json({ message: 'Invalid user role' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification token saved successfully',
     });
   } catch (error) {
     next(error);

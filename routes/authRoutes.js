@@ -6,7 +6,9 @@ const {
   loginStudent,
   registerDriver,
   loginDriver,
+  saveNotificationToken,
 } = require('../controllers/authController');
+const { authMiddleware } = require('../middleware/auth');
 
 // Student registration validation
 const studentRegisterValidation = [
@@ -56,6 +58,9 @@ router.post('/student/login', studentLoginValidation, loginStudent);
 // Driver routes
 router.post('/driver/register', driverRegisterValidation, registerDriver);
 router.post('/driver/login', driverLoginValidation, loginDriver);
+
+// Notification token route (protected)
+router.put('/notification-token', authMiddleware, saveNotificationToken);
 
 module.exports = router;
 
