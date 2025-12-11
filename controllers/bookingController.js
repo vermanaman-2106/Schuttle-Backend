@@ -241,14 +241,29 @@ exports.getMyBookings = async (req, res, next) => {
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
 
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Optimized query with lean() and specific field selection
     const bookings = await Booking.find({ studentId: req.user.id })
-      .populate('rideId')
+      .select('seatsBooked pickupLocation dropLocation rideDateTime bookingStatus paymentStatus rideId driverId createdAt')
+      .populate('rideId', 'pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status')
       .populate('driverId', 'name phone vehicleModel vehicleNumber')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Booking.countDocuments({ studentId: req.user.id });
 
     res.json({
       success: true,
       count: bookings.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
       bookings,
     });
   } catch (error) {
@@ -266,19 +281,46 @@ exports.getDriverBookings = async (req, res, next) => {
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
 
-    // Find all rides by this driver
-    const rides = await Ride.find({ driverId: req.user.id });
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Find all rides by this driver (optimized with lean and select)
+    const rides = await Ride.find({ driverId: req.user.id })
+      .select('_id')
+      .lean();
     const rideIds = rides.map((ride) => ride._id);
 
-    // Find all bookings for these rides
+    if (rideIds.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        total: 0,
+        page: 1,
+        pages: 0,
+        bookings: [],
+      });
+    }
+
+    // Find all bookings for these rides (optimized with lean and select)
     const bookings = await Booking.find({ rideId: { $in: rideIds } })
-      .populate('rideId')
+      .select('seatsBooked pickupLocation dropLocation rideDateTime bookingStatus paymentStatus rideId studentId createdAt')
+      .populate('rideId', 'pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status')
       .populate('studentId', 'name email phone registrationNumber')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Booking.countDocuments({ rideId: { $in: rideIds } });
 
     res.json({
       success: true,
       count: bookings.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
       bookings,
     });
   } catch (error) {

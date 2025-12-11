@@ -55,9 +55,12 @@ const rideSchema = new mongoose.Schema(
   }
 );
 
-// Index for efficient queries
+// Indexes for efficient queries
 rideSchema.index({ driverId: 1, createdAt: -1 });
 rideSchema.index({ status: 1, date: 1 });
+rideSchema.index({ confirmed: 1, status: 1, availableSeats: 1 }); // For getRides query
+rideSchema.index({ date: 1, status: 1, confirmed: 1 }); // Composite index for common queries
+rideSchema.index({ pickupLocation: 'text', dropLocation: 'text' }); // Text search index
 
 // Use 'Rides' collection name to match your database
 module.exports = mongoose.model('Ride', rideSchema, 'Rides');

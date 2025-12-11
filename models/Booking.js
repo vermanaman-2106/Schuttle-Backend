@@ -50,10 +50,12 @@ const bookingSchema = new mongoose.Schema(
   }
 );
 
-// Index for efficient queries
+// Indexes for efficient queries
 bookingSchema.index({ studentId: 1, createdAt: -1 });
 bookingSchema.index({ driverId: 1, createdAt: -1 });
 bookingSchema.index({ rideId: 1 });
+bookingSchema.index({ bookingStatus: 1, createdAt: -1 }); // For filtering by status
+bookingSchema.index({ rideId: 1, bookingStatus: 1 }); // Composite for ride bookings
 
 module.exports = mongoose.model('Booking', bookingSchema);
 

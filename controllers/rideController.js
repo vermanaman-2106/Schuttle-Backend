@@ -70,10 +70,31 @@ exports.getRides = async (req, res, next) => {
     // Only show rides with available seats
     query.availableSeats = { $gt: 0 };
 
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Optimized query with lean() for faster performance
     const rides = await Ride.find(query)
+      .select('pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status confirmed driverId createdAt')
       .populate('driverId', 'name phone vehicleModel vehicleNumber verified')
       .sort({ date: 1, time: 1 })
-      .limit(50);
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean() for read-only queries (faster, returns plain JS objects)
+
+    // Get total count for pagination
+    const total = await Ride.countDocuments(query);
+
+    res.json({
+      success: true,
+      count: rides.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      rides,
+    });
 
     res.json({
       success: true,
@@ -90,10 +111,10 @@ exports.getRides = async (req, res, next) => {
 // @access  Public
 exports.getRideById = async (req, res, next) => {
   try {
-    const ride = await Ride.findById(req.params.id).populate(
-      'driverId',
-      'name phone vehicleModel vehicleNumber verified'
-    );
+    const ride = await Ride.findById(req.params.id)
+      .select('pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status confirmed driverId createdAt')
+      .populate('driverId', 'name phone vehicleModel vehicleNumber verified')
+      .lean();
 
     if (!ride) {
       return res.status(404).json({ message: 'Ride not found' });
@@ -113,13 +134,28 @@ exports.getRideById = async (req, res, next) => {
 // @access  Private (Driver only)
 exports.getDriverRides = async (req, res, next) => {
   try {
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    // Optimized query with lean() and specific field selection
     const rides = await Ride.find({ driverId: req.user.id })
+      .select('pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status confirmed createdAt updatedAt')
       .populate('driverId', 'name phone vehicleModel vehicleNumber')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Ride.countDocuments({ driverId: req.user.id });
 
     res.json({
       success: true,
       count: rides.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
       rides,
     });
   } catch (error) {

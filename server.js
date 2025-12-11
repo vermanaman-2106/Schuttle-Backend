@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const compression = require('compression');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
@@ -15,6 +16,9 @@ connectDB();
 const app = express();
 
 // Middleware
+// Compression for faster responses
+app.use(compression());
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
@@ -49,6 +53,12 @@ app.use('/api/bookings', require('./routes/bookingRoutes'));
 // Health check route
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Schuttle API is running' });
+});
+
+// Keep-alive endpoint to prevent Render cold starts
+// Call this every 5 minutes from a cron job or external service
+app.get('/api/keepalive', (req, res) => {
+  res.json({ success: true, message: 'Server is alive', timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware (must be last)
