@@ -1,5 +1,12 @@
 // Centralized error handling middleware
 const errorHandler = (err, req, res, next) => {
+  // Check if response has already been sent
+  if (res.headersSent) {
+    // If headers already sent, just log the error and return
+    console.error('Error occurred but response already sent:', err);
+    return;
+  }
+
   let error = { ...err };
   error.message = err.message;
 
@@ -41,7 +48,9 @@ const errorHandler = (err, req, res, next) => {
     error = { message, statusCode: 401 };
   }
 
-  res.status(error.statusCode || 500).json({
+  // Send error response only if headers haven't been sent
+  const statusCode = error.statusCode || 500;
+  res.status(statusCode).json({
     success: false,
     message: error.message || 'Server Error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),

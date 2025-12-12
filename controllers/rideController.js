@@ -90,24 +90,33 @@ exports.getRides = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     // Optimized query with lean() for faster performance
+    // IMPORTANT: populate() must come BEFORE lean()
     const rides = await Ride.find(query)
       .select('pickupLocation dropLocation date time pricePerSeat totalSeats availableSeats status confirmed driverId createdAt')
-      .populate('driverId', 'name phone vehicleModel vehicleNumber verified')
+      .populate({
+        path: 'driverId',
+        select: 'name phone vehicleModel vehicleNumber verified',
+        // Handle cases where driverId might be null or invalid
+        options: { lean: true }
+      })
       .sort({ date: 1, time: 1 })
       .skip(skip)
       .limit(limit)
       .lean(); // Use lean() for read-only queries (faster, returns plain JS objects)
+
+    // Filter out rides with null driverId (in case of data inconsistency)
+    const validRides = rides.filter(ride => ride.driverId !== null && ride.driverId !== undefined);
 
     // Get total count for pagination
     const total = await Ride.countDocuments(query);
 
     res.json({
       success: true,
-      count: rides.length,
+      count: validRides.length,
       total,
       page,
       pages: Math.ceil(total / limit),
-      rides,
+      rides: validRides,
     });
 
     res.json({
