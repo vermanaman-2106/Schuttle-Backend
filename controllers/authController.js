@@ -82,7 +82,7 @@ exports.loginStudent = async (req, res, next) => {
     // Normalize email once
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user exists (email is already validated by frontend and express-validator)
+    // Check if user exists (email is already validated by express-validator)
     // IMPORTANT: Don't use .lean() here because we need passwordHash which has select: false
     // The +passwordHash syntax works with regular Mongoose queries, not with lean()
     const user = await User.findOne({ email: normalizedEmail })
@@ -230,31 +230,80 @@ exports.loginDriver = async (req, res, next) => {
   }
 };
 
-// @desc    Save notification token for user/driver
-// @route   PUT /api/auth/notification-token
+// @desc    Get current user/driver profile (fresh from database)
+// @route   GET /api/auth/me
 // @access  Private
-exports.saveNotificationToken = async (req, res, next) => {
+exports.getCurrentUser = async (req, res, next) => {
   try {
-    const { notificationToken } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-    if (!notificationToken) {
-      return res.status(400).json({ message: 'Notification token is required' });
+    let user;
+    if (userRole === 'student') {
+      user = await User.findById(userId)
+        .select('name email phone role registrationNumber department')
+        .lean();
+    } else if (userRole === 'driver') {
+      user = await Driver.findById(userId)
+        .select('name email phone role vehicleModel vehicleNumber totalSeats verified')
+        .lean();
+    } else {
+      return res.status(403).json({ message: 'Unauthorized role' });
     }
 
-    if (req.user.role === 'student') {
-      await User.findByIdAndUpdate(req.user.id, { notificationToken });
-    } else if (req.user.role === 'driver') {
-      await Driver.findByIdAndUpdate(req.user.id, { notificationToken });
-    } else {
-      return res.status(400).json({ message: 'Invalid user role' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
     res.json({
       success: true,
-      message: 'Notification token saved successfully',
+      user: {
+        id: user._id,
+        ...user,
+      },
     });
   } catch (error) {
     next(error);
   }
 };
 
+// @desc    Save notification token for user/driver
+// @route   PUT /api/auth/notification-token
+// @access  Private (Authenticated user/driver)
+exports.saveNotificationToken = async (req, res, next) => {
+  try {
+    const { token } = req.body; // This is the Expo push token
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Notification token is required' });
+    }
+
+    let updatedUser;
+    if (userRole === 'student') {
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { notificationToken: token },
+        { new: true, runValidators: true }
+      );
+    } else if (userRole === 'driver') {
+      updatedUser = await Driver.findByIdAndUpdate(
+        userId,
+        { notificationToken: token },
+        { new: true, runValidators: true }
+      );
+    } else {
+      return res.status(403).json({ message: 'Unauthorized role' });
+    }
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'Notification token saved successfully' });
+  } catch (error) {
+    console.error('Error saving notification token:', error);
+    next(error);
+  }
+};

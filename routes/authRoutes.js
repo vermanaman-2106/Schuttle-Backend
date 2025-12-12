@@ -7,6 +7,7 @@ const {
   registerDriver,
   loginDriver,
   saveNotificationToken,
+  getCurrentUser,
 } = require('../controllers/authController');
 const { authMiddleware } = require('../middleware/auth');
 
@@ -61,6 +62,9 @@ router.post('/driver/login', driverLoginValidation, loginDriver);
 
 // Notification token route (protected)
 router.put('/notification-token', authMiddleware, saveNotificationToken);
+
+// Get current user profile (protected)
+router.get('/me', authMiddleware, getCurrentUser);
 
 module.exports = router;
 
