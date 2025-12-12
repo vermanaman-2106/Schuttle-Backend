@@ -49,6 +49,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/rides', require('./routes/rideRoutes'));
 app.use('/api/bookings', require('./routes/bookingRoutes'));
+app.use('/api/drivers', require('./routes/driverRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
