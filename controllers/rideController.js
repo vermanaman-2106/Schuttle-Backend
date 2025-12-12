@@ -13,6 +13,20 @@ exports.createRide = async (req, res, next) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
+    // Check if driver is verified
+    const driver = await Driver.findById(req.user.id).select('verified').lean();
+    if (!driver) {
+      return res.status(404).json({ message: 'Driver not found' });
+    }
+
+    if (!driver.verified) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Your driver account is not verified yet. Please wait for admin verification before creating rides.',
+        requiresVerification: true,
+      });
+    }
+
     const { pickupLocation, dropLocation, date, time, pricePerSeat, totalSeats } = req.body;
 
     // Create ride (initially pending confirmation)
